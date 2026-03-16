@@ -1,0 +1,23 @@
+name: dsci441
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyterlab
+  - ipykernel
+  - sqlite
+  - pip
+  - pip:
+      - implicit
+      - streamlit
+      - tqdm
+      - python-dotenv
+      - datasets
+      - rapidfuzz
+      - plotly
