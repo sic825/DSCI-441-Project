@@ -12,6 +12,48 @@ For content-based filtering, we match Taste Profile songs to the Spotify Tracks 
 
 We evaluate collaborative filtering using a leave-one-out protocol with HitRate@K and Recall@K, and the content-based model using GenreConsistency@K and average cosine similarity. Future work includes combining both into a hybrid recommender and deploying it as an interactive web application.
 
+## Reproducing Our Results
+
+### 1. Set up the environment
+
+```bash
+conda env create -f environment.yml
+conda activate dsci441
+python -m ipykernel install --user --name dsci441 --display-name "Python (dsci441)"
+```
+
+### 2. Download the data
+
+The Million Song Taste Profile dataset is too large to commit. Download
+`train_triplets.txt.zip` from http://millionsongdataset.com/tasteprofile/ and
+unzip it into `data/raw/`. The Spotify dataset loads automatically from
+HuggingFace via the `datasets` library on first run.
+
+Final directory structure should look like:
+```
+data/
+└── raw/
+    └── train_triplets.txt   # ~3 GB unzipped
+```
+
+### 3. Run the notebooks in order
+
+```bash
+jupyter lab
+```
+
+1. `notebooks/matrix_fact_model.ipynb` — trains the ALS collaborative filter
+2. `notebooks/content_based_model.ipynb` — builds the k-NN content model
+3. `notebooks/evaluation.ipynb` — runs the full eval pipeline
+
+### 4. Launch the web app
+
+```bash
+streamlit run app.py
+```
+
+App will open at http://localhost:8501.
+
 ## Data Sources
 
 - **Taste Profile Subset (Million Song Dataset):** ~48M user-song-play count triplets across ~1M users and ~385K songs. http://millionsongdataset.com/tasteprofile/
