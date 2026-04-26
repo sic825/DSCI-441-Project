@@ -1,23 +1,27 @@
 name: dsci441
 channels:
   - conda-forge
+  - defaults
 dependencies:
   - python=3.11
-  - numpy
-  - pandas
-  - scipy
-  - scikit-learn
-  - matplotlib
-  - seaborn
-  - jupyterlab
-  - ipykernel
+  - numpy=2.4.3
+  - pandas=3.0.2
+  - scipy=1.17.1
+  - scikit-learn=1.8.0
+  - matplotlib=3.10.9
+  - seaborn=0.13.2
+  - jupyterlab=4.5.6
+  - ipykernel=7.2.0
   - sqlite
+  - llvm-openmp        # required for `implicit` on Apple Silicon
+  - openblas
   - pip
   - pip:
-      - implicit
-      - streamlit
-      - tqdm
-      - python-dotenv
-      - datasets
-      - rapidfuzz
-      - plotly
+      - implicit==0.7.2
+      - streamlit==1.56.0
+      - tqdm==4.67.3
+      - python-dotenv==1.0.1
+      - datasets==4.8.4
+      - rapidfuzz==3.14.5
+      - plotly==6.7.0
+      - pyarrow==24.0.0
