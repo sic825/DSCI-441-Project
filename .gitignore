@@ -27,5 +27,4 @@ dist/
 
 # Data / artifacts
 dataset/
-*.pkl
 results/triplets_cache.pkl
