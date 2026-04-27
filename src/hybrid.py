@@ -7,35 +7,246 @@ class HybridRecommender:
     Combines CF (ALS) and CB (k-NN cosine) with cold-start handling.
 
     alpha_strategy:
-        'adaptive': alpha = sigmoid((log(n_history) - 2) / 1.5)
-            -> ~7 interactions:  alpha ~ 0.5  (balanced)
-            -> 1 interaction:    alpha ~ 0.25 (lean content)
-            -> 100+ interactions: alpha ~ 0.85 (lean CF)
-        'fixed':    use the alpha argument directly
-        'switching': alpha=1.0 if n_history > 20 else alpha=0.0
+        'adaptive'  : alpha = sigmoid((log1p(n_history) - 2) / 1.5)
+                          n=1    -> alpha ≈ 0.25  (lean content)
+                          n=7    -> alpha ≈ 0.50  (balanced)
+                          n=100+ -> alpha ≈ 0.85  (lean CF)
+        'fixed'     : always use self.alpha
+        'switching' : alpha=1.0 if n_history > 20 else 0.0
 
-    Score normalization: min-max within each candidate pool before blending.
-    CF scores and cosine similarities live on different scales; unnormalized
-    blending silently lets one model dominate. This is the make-or-break detail.
+    Score normalization: min-max within each model's top-50 candidate pool
+    before blending.  CF scores (ALS dot-product) and cosine similarities
+    live on different ranges; raw blending silently lets one model dominate.
+
+    Cross-catalog overlap:
+        CF operates on ~98K songs; the content k-NN index covers only ~7.6K
+        deduped tracks.  The intersection at init time is ~2.7K songs.
+        Songs outside the overlap receive a score from only one model;
+        their hybrid_score is penalized proportionally (alpha * cf_norm for
+        CF-only, (1-alpha) * content_norm for content-only).
     """
 
-    def __init__(self, cf_model, content_model, alpha_strategy='adaptive', alpha=0.5):
-        self.cf_model = cf_model
-        self.content_model = content_model
-        self.alpha_strategy = alpha_strategy
-        self.alpha = alpha
+    def __init__(
+        self,
+        cf_model,
+        content_model,
+        metadata_catalog: pd.DataFrame,
+        alpha_strategy: str = 'adaptive',
+        alpha: float = 0.5,
+    ):
+        self.cf_model        = cf_model
+        self.content_model   = content_model
+        self.metadata_catalog = metadata_catalog   # song_id, title, artist_name, track_genre
+        self.alpha_strategy  = alpha_strategy
+        self.alpha           = alpha
 
-    def recommend(self, user_id=None, seed_song=None, k=10, return_components=False):
-        """
-        Not yet implemented -- Block 2 deliverable.
+        # Compute overlap once; used to label source in recommend() output.
+        cf_ids      = set(cf_model._idx_to_song.values())
+        content_ids = set(content_model._songid_to_idx.keys())
+        self._overlap_ids = cf_ids & content_ids
 
-        Plan:
-          1. Get top-50 candidates from each available model.
-          2. Min-max normalize scores within each pool.
-          3. Blend: final = alpha * cf_norm + (1-alpha) * content_norm.
-          4. Return top-k by blended score.
-          5. Cold-start (no user_id): pure content from seed_song.
-          6. Warm user, no seed_song: blend CF top-50 with content recs
-             seeded from user's most-played song.
+        # Lazy-built inverse mapping (song_id -> matrix column index) for CF eval.
+        self.__song_to_idx = None
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    def _song_to_idx(self):
+        """Inverse of _idx_to_song, built once on first use."""
+        if self.__song_to_idx is None:
+            self.__song_to_idx = {
+                sid: idx for idx, sid in self.cf_model._idx_to_song.items()
+            }
+        return self.__song_to_idx
+
+    def _get_n_history(self, user_id: str) -> int:
+        uidx = self.cf_model._user_to_idx.get(user_id)
+        if uidx is None:
+            return 0
+        return self.cf_model._user_item[uidx].nnz
+
+    def _compute_alpha(self, user_id: str) -> float:
+        if self.alpha_strategy == 'fixed':
+            return self.alpha
+        n = self._get_n_history(user_id)
+        if self.alpha_strategy == 'switching':
+            return 1.0 if n > 20 else 0.0
+        # adaptive
+        return float(1.0 / (1.0 + np.exp(-((np.log1p(n) - 2.0) / 1.5))))
+
+    def _get_most_played_song(self, user_id: str):
+        """Return the user's most-played song by log1p-weighted play count."""
+        uidx = self.cf_model._user_to_idx.get(user_id)
+        if uidx is None:
+            return None
+        row = self.cf_model._user_item[uidx]
+        if row.nnz == 0:
+            return None
+        best_col = int(row.toarray().flatten().argmax())
+        return self.cf_model._idx_to_song[best_col]
+
+    @staticmethod
+    def _minmax(scores: np.ndarray) -> np.ndarray:
+        """Min-max normalize; returns 0.5 everywhere if all values are equal."""
+        mn, mx = scores.min(), scores.max()
+        if mx == mn:
+            return np.full_like(scores, 0.5, dtype=float)
+        return (scores - mn) / (mx - mn)
+
+    def _cf_candidates(self, user_id: str, k: int = 50,
+                        known_song_ids=None) -> dict:
         """
-        raise NotImplementedError("HybridRecommender.recommend() not yet implemented (Block 2).")
+        Get CF top-k as {song_id: raw_score}.
+
+        known_song_ids: optional set of song_ids to use as the filter mask
+        instead of the full user row.  Pass training-only song_ids during
+        evaluation so held-out items are not filtered from CF's pool.
+        """
+        if user_id not in self.cf_model._user_to_idx:
+            return {}
+        uidx = self.cf_model._user_to_idx[user_id]
+
+        if known_song_ids is not None:
+            # Build a user row containing only the known (training) interactions.
+            full = self.cf_model._user_item[uidx].toarray().flatten()
+            s2i  = self._song_to_idx()
+            mask = np.zeros(full.shape, dtype=bool)
+            for sid in known_song_ids:
+                if sid in s2i:
+                    mask[s2i[sid]] = True
+            from scipy.sparse import csr_matrix
+            user_row = csr_matrix(full * mask)
+        else:
+            user_row = self.cf_model._user_item[uidx]
+
+        idxs, scores = self.cf_model._model.recommend(
+            uidx, user_row, N=k, filter_already_liked_items=True
+        )
+        return {self.cf_model._idx_to_song[int(i)]: float(s)
+                for i, s in zip(idxs, scores)}
+
+    def _content_candidates(self, seed_song_id: str, k: int = 50) -> dict:
+        """Get content top-k as {song_id: similarity}."""
+        if seed_song_id not in self.content_model._songid_to_idx:
+            return {}
+        recs = self.content_model.recommend(seed_song_id, k=k)
+        return dict(zip(recs['song_id'], recs['similarity']))
+
+    def _attach_metadata(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.merge(
+            self.metadata_catalog[['song_id', 'title', 'artist_name']],
+            on='song_id', how='left',
+        )
+        df[['title', 'artist_name']] = df[['title', 'artist_name']].fillna('Unknown')
+        return df
+
+    # ── Public interface ──────────────────────────────────────────────────────
+
+    def recommend(
+        self,
+        user_id=None,
+        seed_song=None,
+        k: int = 10,
+        known_song_ids=None,
+    ) -> pd.DataFrame:
+        """
+        Returns DataFrame with columns:
+            song_id, title, artist_name,
+            hybrid_score, cf_score, content_score,
+            alpha_used, source
+
+        source: 'both' | 'cf_only' | 'content_only'
+
+        Parameters
+        ----------
+        user_id : str, optional
+            MSD user_id.  Required for any CF contribution.
+        seed_song : str, optional
+            MSD song_id used to seed the content model.
+            If omitted for a warm user, defaults to their most-played
+            training song.
+        k : int
+            Number of recommendations to return.
+        known_song_ids : set, optional
+            For evaluation only: song_ids to filter from CF's candidate pool
+            (i.e. the user's 80% training songs).  Allows held-out items to
+            surface from CF.  When None, CF filters all known interactions.
+        """
+        if user_id is None and seed_song is None:
+            raise ValueError("Provide at least one of user_id or seed_song.")
+
+        # ── Cold start ──
+        if user_id is None:
+            return self._cold_start(seed_song, k)
+
+        # ── Warm user ──
+        alpha = self._compute_alpha(user_id)
+
+        cf_raw  = self._cf_candidates(user_id, k=50, known_song_ids=known_song_ids)
+        if seed_song is None:
+            seed_song = self._get_most_played_song(user_id)
+        ct_raw  = self._content_candidates(seed_song, k=50) if seed_song else {}
+
+        # Normalize within each pool (make-or-break: prevents scale dominance)
+        cf_norm = {}
+        if cf_raw:
+            vals = np.array(list(cf_raw.values()), dtype=float)
+            normed = self._minmax(vals)
+            cf_norm = dict(zip(cf_raw.keys(), normed))
+
+        ct_norm = {}
+        if ct_raw:
+            vals = np.array(list(ct_raw.values()), dtype=float)
+            normed = self._minmax(vals)
+            ct_norm = dict(zip(ct_raw.keys(), normed))
+
+        # Build blended candidate pool
+        all_songs = set(cf_norm) | set(ct_norm)
+        rows = []
+        for sid in all_songs:
+            in_cf = sid in cf_norm
+            in_ct = sid in ct_norm
+            cf_s  = cf_norm.get(sid, np.nan)
+            ct_s  = ct_norm.get(sid, np.nan)
+
+            if in_cf and in_ct:
+                source   = 'both'
+                h_score  = alpha * cf_s + (1.0 - alpha) * ct_s
+            elif in_cf:
+                source   = 'cf_only'
+                h_score  = alpha * cf_s          # no content contribution
+            else:
+                source   = 'content_only'
+                h_score  = (1.0 - alpha) * ct_s  # no CF contribution
+
+            rows.append({
+                'song_id':       sid,
+                'cf_score':      cf_s,
+                'content_score': ct_s,
+                'hybrid_score':  h_score,
+                'alpha_used':    alpha,
+                'source':        source,
+            })
+
+        result = (
+            pd.DataFrame(rows)
+              .sort_values('hybrid_score', ascending=False)
+              .head(k)
+              .reset_index(drop=True)
+        )
+        result = self._attach_metadata(result)
+        return result[['song_id', 'title', 'artist_name',
+                        'hybrid_score', 'cf_score', 'content_score',
+                        'alpha_used', 'source']]
+
+    def _cold_start(self, seed_song: str, k: int) -> pd.DataFrame:
+        """Pure content recommendation for users with no CF history."""
+        # ContentModel.recommend() already includes title/artist_name columns.
+        recs = self.content_model.recommend(seed_song, k=k)
+        recs = recs.rename(columns={'similarity': 'content_score'})
+        recs['hybrid_score'] = recs['content_score']
+        recs['cf_score']     = np.nan
+        recs['alpha_used']   = 0.0
+        recs['source']       = 'content_only'
+        return recs[['song_id', 'title', 'artist_name',
+                      'hybrid_score', 'cf_score', 'content_score',
+                      'alpha_used', 'source']].reset_index(drop=True)
