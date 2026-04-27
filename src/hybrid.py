@@ -31,14 +31,18 @@ class HybridRecommender:
         cf_model,
         content_model,
         metadata_catalog: pd.DataFrame,
+        popularity_model=None,
         alpha_strategy: str = 'adaptive',
         alpha: float = 0.5,
+        cold_start_content_weight: float = 0.7,
     ):
-        self.cf_model        = cf_model
-        self.content_model   = content_model
-        self.metadata_catalog = metadata_catalog   # song_id, title, artist_name, track_genre
-        self.alpha_strategy  = alpha_strategy
-        self.alpha           = alpha
+        self.cf_model                  = cf_model
+        self.content_model             = content_model
+        self.metadata_catalog          = metadata_catalog   # song_id, title, artist_name, track_genre
+        self.popularity_model          = popularity_model
+        self.alpha_strategy            = alpha_strategy
+        self.alpha                     = alpha
+        self.cold_start_content_weight = cold_start_content_weight
 
         # Compute overlap once; used to label source in recommend() output.
         cf_ids      = set(cf_model._idx_to_song.values())
@@ -149,12 +153,16 @@ class HybridRecommender:
         known_song_ids=None,
     ) -> pd.DataFrame:
         """
-        Returns DataFrame with columns:
+        Warm path returns:
             song_id, title, artist_name,
-            hybrid_score, cf_score, content_score,
-            alpha_used, source
+            hybrid_score, cf_score, content_score, alpha_used, source
+            source: 'both' | 'cf_only' | 'content_only'
 
-        source: 'both' | 'cf_only' | 'content_only'
+        Cold-start path (user_id=None) returns RRF columns instead:
+            song_id, title, artist_name,
+            rrf_score, content_rank, popularity_rank, source
+            source: 'both' | 'content_only' | 'popularity_only'
+            See _cold_start() for RRF citation.
 
         Parameters
         ----------
@@ -238,15 +246,106 @@ class HybridRecommender:
                         'hybrid_score', 'cf_score', 'content_score',
                         'alpha_used', 'source']]
 
+    def _genre_pop_ranked(self, seed_song: str):
+        """
+        Return (pop_ranked dict {song_id: rank}, fallback_used str).
+
+        If the seed's genre is known, ranks the top-50 MSD-play-count songs
+        within that genre (from metadata_catalog).  Falls back to global top-50
+        when genre is missing or 'Unknown'.
+        """
+        fallback_used = 'global'
+        pop_ranked    = {}
+
+        if self.popularity_model is None:
+            return pop_ranked, fallback_used
+
+        # Genre lookup
+        row = self.metadata_catalog.loc[
+            self.metadata_catalog['song_id'] == seed_song, 'track_genre'
+        ]
+        genre = row.iloc[0] if not row.empty else 'Unknown'
+
+        if genre and genre != 'Unknown':
+            genre_ids = set(
+                self.metadata_catalog.loc[
+                    self.metadata_catalog['track_genre'] == genre, 'song_id'
+                ].astype(str)
+            )
+            top_songs = self.popularity_model._top_songs
+            genre_top = top_songs[
+                top_songs.index.astype(str).isin(genre_ids)
+            ].head(50)
+            if not genre_top.empty:
+                for rank, sid in enumerate(genre_top.index.astype(str), start=1):
+                    pop_ranked[sid] = rank
+                fallback_used = 'genre'
+
+        if not pop_ranked:  # genre empty or lookup failed
+            top50 = self.popularity_model._top_songs.head(50)
+            for rank, sid in enumerate(top50.index.astype(str), start=1):
+                pop_ranked[sid] = rank
+            fallback_used = 'global'
+
+        return pop_ranked, fallback_used
+
     def _cold_start(self, seed_song: str, k: int) -> pd.DataFrame:
-        """Pure content recommendation for users with no CF history."""
-        # ContentModel.recommend() already includes title/artist_name columns.
-        recs = self.content_model.recommend(seed_song, k=k)
-        recs = recs.rename(columns={'similarity': 'content_score'})
-        recs['hybrid_score'] = recs['content_score']
-        recs['cf_score']     = np.nan
-        recs['alpha_used']   = 0.0
-        recs['source']       = 'content_only'
-        return recs[['song_id', 'title', 'artist_name',
-                      'hybrid_score', 'cf_score', 'content_score',
-                      'alpha_used', 'source']].reset_index(drop=True)
+        """
+        Reciprocal Rank Fusion cold-start: blend content k-NN with
+        genre-conditioned (or global) popularity.
+
+        RRF score = sum_{i in {content, popularity}} 1 / (60 + rank_i(s))
+        where rank_i is 1-indexed; missing list contributes 0.
+
+        k=60 constant from Cormack, Clarke & Buettcher (2009) "Reciprocal Rank
+        Fusion Outperforms Condorcet and Individual Rank Learning Methods."
+
+        Returns columns: song_id, title, artist_name,
+                         rrf_score, content_rank, popularity_rank,
+                         source, fallback_used
+        (cf_score / content_score / alpha_used are not meaningful with RRF.)
+        """
+        # ── Content ranking ───────────────────────────────────────────────────
+        ct_raw = self._content_candidates(seed_song, k=50)
+        ct_ranked = {}
+        if ct_raw:
+            for rank, sid in enumerate(
+                sorted(ct_raw, key=ct_raw.__getitem__, reverse=True), start=1
+            ):
+                ct_ranked[sid] = rank
+
+        # ── Genre-conditioned popularity ranking ──────────────────────────────
+        pop_ranked, fallback_used = self._genre_pop_ranked(seed_song)
+
+        # ── RRF scoring ───────────────────────────────────────────────────────
+        RRF_K = 60  # Cormack et al. (2009)
+        all_songs = set(ct_ranked) | set(pop_ranked)
+        rows = []
+        for sid in all_songs:
+            in_ct  = sid in ct_ranked
+            in_pop = sid in pop_ranked
+            rrf    = 0.0
+            if in_ct:
+                rrf += 1.0 / (RRF_K + ct_ranked[sid])
+            if in_pop:
+                rrf += 1.0 / (RRF_K + pop_ranked[sid])
+            rows.append({
+                'song_id':         sid,
+                'rrf_score':       rrf,
+                'content_rank':    float(ct_ranked[sid])  if in_ct  else np.nan,
+                'popularity_rank': float(pop_ranked[sid]) if in_pop else np.nan,
+                'fallback_used':   fallback_used,
+                'source': 'both' if (in_ct and in_pop) else
+                          ('content_only' if in_ct else 'popularity_only'),
+            })
+
+        result = (
+            pd.DataFrame(rows)
+              .sort_values('rrf_score', ascending=False)
+              .head(k)
+              .reset_index(drop=True)
+        )
+        result = self._attach_metadata(result)
+        return result[['song_id', 'title', 'artist_name',
+                        'rrf_score', 'content_rank', 'popularity_rank',
+                        'source', 'fallback_used']].reset_index(drop=True)
