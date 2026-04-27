@@ -48,9 +48,12 @@ class HybridRecommender:
         self.cold_start_content_weight = cold_start_content_weight
 
         # Compute overlap once; used to label source in recommend() output.
-        cf_ids      = set(cf_model._idx_to_song.values())
-        content_ids = set(content_model._songid_to_idx.keys())
-        self._overlap_ids = cf_ids & content_ids
+        if cf_model is not None and content_model is not None:
+            cf_ids      = set(cf_model._idx_to_song.values())
+            content_ids = set(content_model._songid_to_idx.keys())
+            self._overlap_ids = cf_ids & content_ids
+        else:
+            self._overlap_ids = set()
 
         # Lazy-built inverse mapping (song_id -> matrix column index) for CF eval.
         self.__song_to_idx = None

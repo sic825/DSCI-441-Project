@@ -29,3 +29,6 @@ dist/
 dataset/
 models/
 *.pkl
+results/triplets_cache.pkl
+results/cold_start_split.pkl
+results/test_users.pkl
