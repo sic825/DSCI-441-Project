@@ -36,7 +36,9 @@ candidate lists are merged at query time by the `HybridRecommender` class.
 The following data-flow diagram summarizes the full pipeline.
 """)
 
-st.graphviz_chart("""
+_col_l, _col_c, _col_r = st.columns([1, 2, 1])
+with _col_c:
+    st.graphviz_chart("""
 digraph G {
     rankdir=LR; bgcolor="#FFFFFF";
     node [shape=box, style="filled,rounded", fillcolor="#EEF3F9",
@@ -59,7 +61,7 @@ digraph G {
     Spot -> Mat -> kNN -> CB -> Hyb
     Hyb -> Out
 }
-""")
+""", use_container_width=True)
 figcap(
     "Figure 1: End-to-end data flow. The two retrieval components are trained independently; "
     "the HybridRecommender merges their outputs at serving time."
@@ -182,7 +184,9 @@ amplification for items that are both acoustically similar to the seed and
 contextually popular within the same genre.
 """)
 
-st.graphviz_chart("""
+_col_l2, _col_c2, _col_r2 = st.columns([1, 2, 1])
+with _col_c2:
+    st.graphviz_chart("""
 digraph CS {
     rankdir=TB; bgcolor="#FFFFFF";
     node [shape=box, style="filled,rounded", fillcolor="#EEF3F9",
@@ -203,7 +207,7 @@ digraph CS {
     Seed -> kNN -> RRF
     RRF -> Out
 }
-""")
+""", use_container_width=True)
 figcap(
     "Figure 3: Cold-start recommendation pipeline. Genre-conditioned popularity "
     "is used when the seed song's genre can be identified from the metadata catalog; "

@@ -10,6 +10,27 @@ inject()
 ROOT = Path(__file__).parent.parent
 R    = ROOT / "results"
 
+
+def _metric_row(cards):
+    """Render a horizontal row of styled metric cards. cards = [(label, value, subtitle)]."""
+    cols = st.columns(len(cards))
+    for col, (label, value, sub) in zip(cols, cards):
+        with col:
+            st.markdown(
+                f'<div style="background:#F8FAFC;border:1px solid #D0E0F0;border-radius:8px;'
+                f'padding:14px 16px;text-align:center;min-height:100px;">'
+                f'<div style="font-family:Helvetica Neue,Arial,sans-serif;font-size:0.72em;'
+                f'color:#555;text-transform:uppercase;letter-spacing:0.08em;'
+                f'margin-bottom:6px;">{label}</div>'
+                f'<div style="font-family:Helvetica Neue,Arial,sans-serif;font-size:1.6em;'
+                f'font-weight:700;color:#1F4E79;line-height:1.1;">{value}</div>'
+                f'<div style="font-family:Helvetica Neue,Arial,sans-serif;font-size:0.78em;'
+                f'color:#888;font-style:italic;margin-top:5px;">{sub}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
 st.title("Results")
 st.markdown(
     '<p style="font-family: Helvetica Neue, Arial, sans-serif; color:#555;">'
@@ -19,9 +40,26 @@ st.markdown(
 )
 st.divider()
 
-# ── 4.1 Warm-User Performance ─────────────────────────────────────────────────
+# ── §1 Warm-User Performance ──────────────────────────────────────────────────
 st.markdown("## 1. Warm-User Performance")
 
+st.markdown("""
+Hybrid achieves statistical equivalence with the CF ceiling on warm-user evaluation,
+and the result is robust to the long-tail popularity-bias correction. The adaptive
+alpha mechanism assigns CF-dominant weights to all test users (α ∈ [0.593, 0.946]),
+so the two models produce nearly identical ranked lists. The content-only baseline
+sits near floor: the 7,611-song content catalog covers only 12.5% of the CF song
+space, making content-indexed songs rare in test users' held-out sets.
+""")
+
+_metric_row([
+    ("NDCG@10 Hybrid",  "0.1099",   "CI [0.1008, 0.1196]"),
+    ("NDCG@10 CF",      "0.1100",   "CI [0.1006, 0.1195]"),
+    ("Δ (Hybrid − CF)", "−0.00004", "p = 0.72"),
+    ("Cohen's d",       "−0.006",   "negligible"),
+])
+
+st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
 st.image(str(R / "poster_three_protocol_comparison.png"), use_container_width=True)
 figcap(
     "Figure 4: NDCG@10 with 95% bootstrap confidence intervals across the three "
@@ -30,16 +68,6 @@ figcap(
     "evaluation because the test users' held-out songs are rarely in the 7,611-song "
     "content catalog."
 )
-
-st.markdown("""
-On both warm protocols, Hybrid (adaptive) is statistically indistinguishable from
-the CF baseline. Standard warm evaluation yields NDCG@10 = 0.1099 for Hybrid
-versus 0.1100 for CF (Δ = −0.00004, p = 0.72, *d* = −0.006 [negligible]).
-The same result holds under long-tail correction (Δ = −0.00004, p = 0.70,
-*d* = −0.006). Both models significantly outperform the Popularity baseline
-(NDCG@10 = 0.0196, p < 0.001, *d* = 0.61 [medium]) and the Content-only
-baseline (NDCG@10 ≈ 0.0005, essentially at floor).
-""")
 
 st.markdown("**Table 1.** Warm-user NDCG@10 (standard protocol, *n* = 1,000).")
 st.markdown("""
@@ -64,9 +92,27 @@ callout(
 )
 st.divider()
 
-# ── 4.2 Cold-Start Performance ────────────────────────────────────────────────
+# ── §2 Cold-Start Performance ──────────────────────────────────────────────────
 st.markdown("## 2. Cold-Start Performance")
 
+st.markdown("""
+Standard cold-start evaluation places the non-personalized Popularity baseline first.
+This is a popularity bias artifact: heavy-listener test sets contain globally popular
+songs simply because those users have listened to them, making popularity an
+accidentally effective baseline under this protocol. Long-tail correction removes
+the top-100 globally most-played songs from ground truth, eliminating the artifact.
+Under this bias-corrected evaluation, Popularity collapses to zero, Content-only barely
+registers, and Hybrid is the only model achieving meaningful performance.
+""")
+
+_metric_row([
+    ("NDCG@10 Hybrid (LT)",  "0.0168", "p < 0.001 vs Popularity"),
+    ("NDCG@10 Pop. (LT)",    "0.000",  "collapses under correction"),
+    ("NDCG@10 Content (LT)", "0.0025", "CI [0.0013, 0.0042]"),
+    ("Relative improvement", "6.7×",   "Hybrid vs Content, d = 0.29"),
+])
+
+st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
 st.image(str(R / "poster_coldstart_standard_vs_longtail.png"), use_container_width=True)
 figcap(
     "Figure 5: Cold-start NDCG@10 under standard evaluation (left) and long-tail "
@@ -74,21 +120,6 @@ figcap(
     "long-tail correction; Hybrid is the only model that achieves non-trivial "
     "performance under both protocols."
 )
-
-st.markdown("""
-Under standard cold-start evaluation (all held-out items scored), Popularity
-achieves NDCG@10 = 0.0998, outperforming Hybrid's 0.0278 (p < 0.001, *d* = −0.38
-[small]). This apparent dominance of a non-personalized baseline is a textbook
-instance of the popularity bias described by Steck (2011): popular songs appear
-frequently in hold-out sets because users have genuinely listened to them, and a
-model recommending popular songs exploits this correlation without any personalization.
-
-Long-tail correction reveals the true picture. After removing the top-100 globally
-most-played songs from held-out ground truth, Popularity collapses to NDCG@10 = 0.000,
-while Hybrid achieves NDCG@10 = 0.0168 (p < 0.001, *d* = 0.33 [small]). Content-only
-achieves 0.0025, so Hybrid represents a 6.7× relative improvement (p < 0.001,
-*d* = 0.29 [small]).
-""")
 
 st.markdown("**Table 2.** Cold-start NDCG@10 (*n* = 871).")
 st.markdown("""
@@ -111,9 +142,35 @@ callout(
 )
 st.divider()
 
-# ── 4.3 Blending Strategy Ablation ───────────────────────────────────────────
+# ── §3 Ablation Study ─────────────────────────────────────────────────────────
 st.markdown("## 3. Ablation Study")
 
+st.markdown("""
+Three warm-path blending strategies were evaluated against the CF ceiling on the same
+1,000-user hold-out. Only adaptive alpha achieves statistical equivalence with CF.
+Fixed equal weighting (α = 0.5) and Reciprocal Rank Fusion both significantly degrade
+warm-user accuracy. The mechanism is direct: the adaptive formula correctly assigns
+CF-dominant weights to all test users, while fixed equal weighting dilutes the stronger
+CF signal regardless of interaction count. The same ordering holds under long-tail
+correction.
+""")
+
+_metric_row([
+    ("Adaptive α vs CF",    "p = 0.69",   "Δ = −0.00004, d = −0.006"),
+    ("Fixed α = 0.5 vs CF", "p < 0.0001", "d = −0.192 (negligible)"),
+    ("RRF vs CF",           "p = 0.0002", "d = −0.157 (negligible)"),
+])
+
+callout(
+    "Note on p-value",
+    "<p>The Adaptive α vs CF p-value here (0.69) differs slightly from the p = 0.72 reported "
+    "in §1 for the same comparison. Both come from independent 10,000-resample bootstrap runs "
+    "on the same data split; the ±0.03 gap reflects bootstrap variance rather than a "
+    "methodological discrepancy. The conclusion is identical in both: non-significant, "
+    "negligible effect size.</p>",
+)
+
+st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
 st.image(str(R / "poster_warm_hybrid_ablation.png"), use_container_width=True)
 figcap(
     "Figure 6: NDCG@10 across three hybrid blending variants versus the CF baseline under "
@@ -121,25 +178,28 @@ figcap(
     "p = 0.69) is the only variant statistically equivalent to CF; Fixed α = 0.5 and RRF "
     "are significantly worse under both protocols (p < 0.0001 and p = 0.0002 respectively)."
 )
-
-st.markdown("""
-To validate the choice of adaptive alpha, we compare three warm-path variants —
-Adaptive (current default), Fixed *α* = 0.5, and Reciprocal Rank Fusion — against
-the CF ceiling on the same 1,000-user hold-out. Adaptive achieves Δ = −0.00004
-(p = 0.69, *d* = −0.006 [negligible]), confirming equivalence to CF. Fixed *α* = 0.5
-and RRF are both significantly worse than CF (p < 0.0001 for Fixed, p = 0.0002 for
-RRF) with *d* = −0.192 and *d* = −0.157 respectively (approaching small effect).
-The same ordering holds under long-tail correction.
-
-The empirical result validates the design rationale: equal content weighting dilutes
-CF signal for the warm population, where CF is the stronger model. Adaptive alpha
-adapts correctly by assigning CF-dominant weights to all users in the test set.
-""")
 st.divider()
 
-# ── 4.4 Recommendation Diversity ─────────────────────────────────────────────
+# ── §4 Recommendation Diversity ───────────────────────────────────────────────
 st.markdown("## 4. Recommendation Diversity")
 
+st.markdown("""
+Hybrid and CF produce recommendations with statistically indistinguishable diversity
+across all three metrics: intra-list similarity, genre coverage, and catalog coverage.
+The one detectable difference — Hybrid recommendations appear in the Spotify metadata
+catalog 0.025 songs per list more than CF — is statistically significant but negligible
+in magnitude. Content-only recommendations cluster tightly because the Spotify audio
+feature space contains many near-duplicate tracks with similarity ≈ 1.0.
+""")
+
+_metric_row([
+    ("ILS Hybrid",               "≈ 0.27",  "≈ CF, no sig. difference"),
+    ("ILS Content",               "0.904",   "near-duplicate clusters"),
+    ("Coverage Δ (Hybrid − CF)", "+0.025",  "p = 0.004, d = 0.099"),
+    ("Genre Coverage",            "≈ 0.27",  "no sig. difference across models"),
+])
+
+st.markdown("<div style='margin-top:1rem;'></div>", unsafe_allow_html=True)
 st.image(str(R / "poster_diversity_comparison.png"), use_container_width=True)
 figcap(
     "Figure 7: Diversity metrics (ILS, genre coverage, catalog coverage) for all four "
@@ -147,23 +207,9 @@ figcap(
     "reflects near-duplicate audio feature clusters. CF and Hybrid are statistically "
     "indistinguishable on all three metrics."
 )
-
-st.markdown("""
-We report three diversity metrics at *k* = 10: Intra-List Similarity (ILS),
-genre coverage, and catalog coverage. Content recommendations are highly similar
-(ILS = 0.904), consistent with the known near-duplicate contamination in the
-Spotify audio feature space — the k-NN index finds acoustically near-identical
-tracks. CF and Hybrid produce substantially more diverse lists (ILS ≈ 0.27),
-with confidence intervals fully overlapping. Genre coverage is similar across all
-models (≈ 0.25–0.30 unique genres per 10 recommendations) with no significant
-differences. Hybrid recommendations appear in the metadata catalog 0.025 songs/list
-more often than CF recommendations (p = 0.004), a statistically detectable but
-negligible effect (*d* = 0.099). Hybrid offers no meaningful diversity advantage
-over CF alone, consistent with alpha-bounding limiting the content contribution.
-""")
 st.divider()
 
-# ── 5. Conclusions and Limitations ───────────────────────────────────────────
+# ── §5 Conclusions and Limitations ────────────────────────────────────────────
 st.markdown("## 5. Conclusions and Limitations")
 st.markdown("""
 We draw three conclusions. First, for users with sufficient interaction history,

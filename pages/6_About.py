@@ -16,16 +16,16 @@ st.markdown("""
 <table>
 <tr><th>Name</th><th>Affiliation</th><th>Role</th></tr>
 <tr><td><strong>Simon Chen</strong></td>
-    <td>Department of Computer Science & Engineering,<br>Lehigh University, Bethlehem, PA 18015</td>
+    <td>Lehigh University</td>
     <td>Collaborative filtering, hybrid architecture, evaluation pipeline</td></tr>
 <tr><td><strong>Thoi Quach</strong></td>
-    <td>Department of Computer Science & Engineering,<br>Lehigh University, Bethlehem, PA 18015</td>
+    <td>Lehigh University</td>
     <td>Content-based filtering, cold-start design, Streamlit application</td></tr>
 </table>
 
-**Course:** DSCI 441 — Statistical Machine Learning
-**Instructor:** Dr. Yari
-**Semester:** Spring 2026
+<p style="margin:0.3em 0 0 0;"><strong>Course:</strong> DSCI 441 — Statistical Machine Learning</p>
+<p style="margin:0.2em 0 0 0;"><strong>Instructor:</strong> Masoud Yari</p>
+<p style="margin:0.2em 0 0 0;"><strong>Semester:</strong> Spring 2026</p>
 """, unsafe_allow_html=True)
 
 st.divider()
@@ -33,7 +33,7 @@ st.divider()
 # ── Acknowledgments ───────────────────────────────────────────────────────────
 st.markdown("## Acknowledgments")
 st.markdown("""
-We thank Dr. Yari for guidance on the statistical methodology, particularly
+We thank Masoud Yari for guidance on the statistical methodology, particularly
 the emphasis on bootstrap confidence intervals and effect-size reporting.
 The Million Song Dataset was created by Thierry Bertin-Mahieux, Daniel P. W. Ellis,
 Brian Whitman, and Paul Lamere at Columbia University. The Spotify Tracks Dataset
@@ -51,9 +51,7 @@ st.markdown("""
 The full source code, trained model artifacts (excluding large binary files committed
 via Git LFS), and results CSVs are available at:
 
-- **GitHub repository:** *(link to be added upon public release)*
-- **Paper PDF:** *(to be added after final submission)*
-- **Demo video:** *(to be added after recording)*
+- **GitHub repository:** [github.com/sic825/DSCI-441-Project](https://github.com/sic825/DSCI-441-Project)
 
 Reproduction requires the MSD Taste Profile Subset and the Spotify Tracks Dataset
 (see `README.md` for download instructions). A `conda` environment specification
@@ -80,8 +78,3 @@ use Apache Parquet via `pyarrow`.
 | Interactive plots | `plotly` | 5.x |
 """)
 
-st.divider()
-st.caption(
-    "DSCI 441 Final Project — Lehigh University — Spring 2026. "
-    "Submitted April 27, 2026."
-)

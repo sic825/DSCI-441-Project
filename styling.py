@@ -162,6 +162,20 @@ code, pre {
 
 /* ── Hide the entry script from sidebar nav ─────────────────────────────── */
 [data-testid="stSidebarNav"] li:first-child { display: none; }
+
+/* ── Primary button: white text in enabled/hover/disabled states ─────────── */
+.stButton > button[kind="primary"] {
+    color: #FFFFFF !important;
+    background-color: #1F4E79 !important;
+}
+.stButton > button[kind="primary"]:hover {
+    color: #FFFFFF !important;
+    background-color: #163A5C !important;
+}
+.stButton > button[kind="primary"]:disabled {
+    color: #888 !important;
+    background-color: #EEE !important;
+}
 </style>
 """
 

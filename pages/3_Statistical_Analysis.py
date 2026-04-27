@@ -26,27 +26,16 @@ the sole seed. NDCG@10, HitRate@10, and Recall@10 are computed per user and
 aggregated with bootstrap 95% confidence intervals.
 
 Four distinct protocols are used across the evaluation suite:
-
-**Warm-standard:** 80/20 interaction hold-out; all held-out items eligible for
-scoring. Tests whether the hybrid blending improves over CF-alone when a rich
-interaction history is available. n = 1,000 users.
-
-**Warm-long-tail:** Same 80/20 split; top-100 globally most-played songs removed
-from held-out ground truth before NDCG scoring. This protocol follows Steck (2011)
-and removes the evaluation advantage of models that recommend popular hits,
-providing a popularity-bias-corrected view of ranking quality. n ≈ 999 users
-(users whose entire held-out set consists of top-100 songs are excluded).
-
-**Cold-start standard:** A separate cohort; the user's most-played song in the
-content catalog (7,611 songs) serves as the sole input seed. Held-out ground truth
-is unrestricted. Tests whether the genre-conditioned RRF cold-start strategy
-produces better personalized rankings than content or popularity baselines. n = 871.
-
-**Cold-start long-tail:** Same seed selection and cohort; top-100 globally
-most-played songs excluded from ground truth. This is the most stringent protocol:
-it removes the popularity shortcut and forces evaluation on songs that require
-genuine personalization signal to surface. n ≈ 869.
 """)
+st.markdown(
+    '<div style="margin-left:1.5em;">'
+    '<p><strong>1. Warm-standard.</strong> 80/20 interaction hold-out; all held-out items eligible for scoring. Tests whether the hybrid blending improves over CF-alone when a rich interaction history is available. n = 1,000 users.</p>'
+    '<p><strong>2. Warm-long-tail.</strong> Same 80/20 split; top-100 globally most-played songs removed from held-out ground truth before NDCG scoring. This protocol follows Steck (2011) and removes the evaluation advantage of models that recommend popular hits, providing a popularity-bias-corrected view of ranking quality. n ≈ 999 users (users whose entire held-out set consists of top-100 songs are excluded).</p>'
+    '<p><strong>3. Cold-start standard.</strong> A separate cohort; the user\'s most-played song in the content catalog (7,611 songs) serves as the sole input seed. Held-out ground truth is unrestricted. Tests whether the genre-conditioned RRF cold-start strategy produces better personalized rankings than content or popularity baselines. n = 871.</p>'
+    '<p><strong>4. Cold-start long-tail.</strong> Same seed selection and cohort; top-100 globally most-played songs excluded from ground truth. This is the most stringent protocol: it removes the popularity shortcut and forces evaluation on songs that require genuine personalization signal to surface. n ≈ 869.</p>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 
 callout(
     "Why Long-Tail Correction Matters",
@@ -151,6 +140,6 @@ callout(
     "</ul>"
     "<p style='margin-top:0.5em;'>Key result summary: Hybrid vs CF warm comparisons "
     "yield <em>d</em> ≈ −0.006 (negligible). Ablation variants Fixed-0.5 and RRF "
-    "yield <em>d</em> ≈ −0.19 and −0.16 (approaching small). Cold-start Hybrid vs "
+    "yield <em>d</em> ≈ −0.19 and −0.16 (negligible). Cold-start Hybrid vs "
     "Content-only under long-tail yields <em>d</em> = 0.29 (small).</p>",
 )

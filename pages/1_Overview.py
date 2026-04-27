@@ -16,13 +16,14 @@ st.markdown(
     '</p>',
     unsafe_allow_html=True,
 )
-st.markdown("""
-<div style="font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.4; margin-bottom: 0.6rem;">
-<p style="font-size:1.05em; font-style:italic; margin:0; color:#1A1A1A;">Simon Chen, Thoi Quach</p>
-<p style="font-size:0.95em; margin:0.2em 0 0 0; color:#666;">Lehigh University &nbsp;·&nbsp; DSCI 441: Statistical Machine Learning</p>
-<p style="font-size:0.85em; margin:0.2em 0 0 0; color:#888;">Spring 2026</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    '<div style="font-family: Helvetica Neue, Arial, sans-serif; line-height: 1.5; margin-bottom: 0.6rem;">'
+    '<p style="font-size:1.0em; margin:0; color:#555;">Simon Chen, Thoi Quach</p>'
+    '<p style="font-size:1.0em; margin:0.1em 0 0 0; color:#555;">DSCI 441: Statistical Machine Learning</p>'
+    '<p style="font-size:1.0em; margin:0.1em 0 0 0; color:#555;">Spring 2026</p>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 st.divider()
 
 # ── Abstract ──────────────────────────────────────────────────────────────────
@@ -112,16 +113,28 @@ the content component's catalog contribution is small relative to the CF pool.
 st.divider()
 
 # ── Headline metrics (quick-reference summary) ────────────────────────────────
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Warm NDCG@10", "0.1099", delta="≈ CF baseline (p = 0.72)", delta_color="off")
-    st.caption("n = 1,000 warm users · 80/20 hold-out")
-with col2:
-    st.metric("Cold-Start LT NDCG@10", "0.0168", delta="+6.7× vs Content-only", delta_color="normal")
-    st.caption("n = 869 cold-start users · top-100 excluded")
-with col3:
-    st.metric("Catalog Coverage Δ (Hybrid − CF)", "+0.025", delta="p = 0.004, d = 0.099", delta_color="off")
-    st.caption("Paired bootstrap · 10 K resamples")
+_cards = [
+    ("Warm NDCG@10",                  "0.1099", "≈ CF baseline (p = 0.72)",         "n = 1,000 warm users · 80/20 hold-out"),
+    ("Cold-Start LT NDCG@10",         "0.0168", "+6.7× vs Content-only",             "n = 871 cold-start users (n = 869 after long-tail exclusion)"),
+    ("Catalog Coverage Δ (Hybrid − CF)", "+0.025", "p = 0.004, d = 0.099",           "Paired bootstrap · 10K resamples"),
+]
+_cols = st.columns(3)
+for _col, (label, value, sub, cap) in zip(_cols, _cards):
+    with _col:
+        st.markdown(
+            f'<div style="background:#F8FAFC;border:1px solid #D0E0F0;border-radius:8px;'
+            f'padding:14px 16px;text-align:center;min-height:100px;">'
+            f'<div style="font-family:Helvetica Neue,Arial,sans-serif;font-size:0.72em;'
+            f'color:#555;text-transform:uppercase;letter-spacing:0.08em;'
+            f'margin-bottom:6px;">{label}</div>'
+            f'<div style="font-family:Helvetica Neue,Arial,sans-serif;font-size:1.6em;'
+            f'font-weight:700;color:#1F4E79;line-height:1.1;">{value}</div>'
+            f'<div style="font-family:Helvetica Neue,Arial,sans-serif;font-size:0.78em;'
+            f'color:#888;font-style:italic;margin-top:5px;">{sub}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(cap)
 
 st.divider()
 
