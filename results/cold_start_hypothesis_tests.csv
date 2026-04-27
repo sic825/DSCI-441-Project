@@ -1,7 +1,7 @@
-protocol,comparison,delta_mean,p_value,significant_at_0.05
-standard,Popularity vs Hybrid,0.07204423759762092,0.0,True
-standard,Hybrid vs Content,0.02491394809071277,0.0,True
-standard,Hybrid vs CFColdStart,-0.07204423759762092,0.0,True
-long-tail,Hybrid vs Popularity,0.016828029287288403,0.0,True
-long-tail,Hybrid vs Content,0.014311356260442389,0.0,True
-long-tail,Hybrid vs CFColdStart,0.016828029287288403,0.0,True
+protocol,comparison,delta_mean,p_value,significant_at_0.05,cohens_d,effect_size
+standard,Popularity vs Hybrid,0.0720442375976209,0.0,True,0.3767,small
+standard,Hybrid vs Content,0.0249139480907127,0.0,True,0.3865,small
+standard,Hybrid vs CFColdStart,-0.0720442375976209,0.0,True,-0.3767,small
+long-tail,Hybrid vs Popularity,0.0168280292872884,0.0,True,0.3292,small
+long-tail,Hybrid vs Content,0.0143113562604423,0.0,True,0.2889,small
+long-tail,Hybrid vs CFColdStart,0.0168280292872884,0.0,True,0.3292,small

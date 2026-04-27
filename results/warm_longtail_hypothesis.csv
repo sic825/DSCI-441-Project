@@ -1,0 +1,4 @@
+comparison,delta_mean,p_value,significant_at_0.05,cohens_d,effect_size
+Hybrid vs CF,-3.536026687153073e-05,0.7201,False,-0.0061,negligible
+Hybrid vs Popularity,0.0736798566059477,0.0,True,0.5703,medium
+Hybrid vs Content,0.0733309184746715,0.0,True,0.5662,medium

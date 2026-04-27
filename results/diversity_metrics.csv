@@ -1,0 +1,6 @@
+model,ils_mean,ils_ci_low,ils_ci_high,ils_n_users,genre_cov_mean,genre_cov_low,genre_cov_high,unique_songs_rec,pct_in_content_cat,pct_in_meta_cat,pct_in_cf_cat,test_delta_mean,test_p_value,test_cohens_d,test_significant_at_0.05,test_effect_size
+popularity,,,,0.0,1.0,1.0,1.0,10.0,10.0,10.0,100.0,,,,,
+cf,0.269,0.2411,0.2991,448.0,1.973,1.878,2.067,2563.0,13.7,21.5,100.0,,,,,
+content,0.9041,0.9007,0.9076,839.0,6.186,5.983,6.375,3254.0,100.0,100.0,39.8,,,,,
+hybrid,0.272,0.241,0.3014,452.0,2.003,1.901,2.096,2588.0,14.8,22.5,99.3,,,,,
+hybrid_vs_cf_catalog_coverage,,,,,,,,,,,,0.025,0.0043,0.0985,True,negligible

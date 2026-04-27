@@ -156,6 +156,65 @@ def paired_bootstrap_test(
     return extreme / n_resamples
 
 
+# ── Cold-start test split ─────────────────────────────────────────────────────
+
+def cold_start_test_split(
+    triplets_df: pd.DataFrame,
+    user_to_idx: dict,
+    n_users: int = 1000,
+    min_interactions: int = 10,
+    seed: int = 42,
+) -> dict:
+    """
+    Build a cold-start test set using the same 1000 users as final_evaluation
+    (same eligible pool + seed=42).
+
+    For each user:
+      seed_song_id  = most-played song by raw play count
+      held_out_songs = every other song they listened to (seed excluded)
+
+    Returns:
+        {user_id: {
+            'seed_song_id':   str,
+            'held_out_songs': set(str),
+            'history_hidden': True,
+        }}
+    """
+    # Count unique songs per user for the min_interactions filter.
+    user_nunique = triplets_df.groupby('uid')['sid'].nunique()
+    eligible = [u for u in user_to_idx
+                if user_nunique.get(u, 0) >= min_interactions]
+
+    rng = np.random.default_rng(seed)
+    sampled = rng.choice(
+        eligible, size=min(n_users, len(eligible)), replace=False
+    ).tolist()
+    sampled_set = set(sampled)
+
+    # Per-user per-song totals, limited to sampled users to save memory.
+    plays = (
+        triplets_df[triplets_df['uid'].isin(sampled_set)]
+        .groupby(['uid', 'sid'])['count']
+        .sum()
+    )
+    users_with_plays = set(plays.index.get_level_values(0))
+
+    cold_start_data = {}
+    for uid in sampled:
+        if uid not in users_with_plays:
+            continue
+        user_plays = plays.loc[uid].sort_values(ascending=False)
+        seed_song  = str(user_plays.index[0])
+        held_out   = {str(s) for s in user_plays.index[1:]}
+        cold_start_data[uid] = {
+            'seed_song_id':   seed_song,
+            'held_out_songs': held_out,
+            'history_hidden': True,
+        }
+
+    return cold_start_data
+
+
 # ── Self-verification (run as script) ────────────────────────────────────────
 
 if __name__ == '__main__':

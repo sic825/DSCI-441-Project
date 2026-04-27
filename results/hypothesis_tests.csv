@@ -1,4 +1,4 @@
-model_a,model_b,metric,delta,p_value,significant_p05
-hybrid,popularity,ndcg@10,0.0904,0.0,True
-hybrid,cf,ndcg@10,-0.0,0.7155,False
-hybrid,content,ndcg@10,0.1094,0.0,True
+model_a,model_b,metric,delta,p_value,significant_p05,cohens_d,effect_size
+hybrid,popularity,ndcg@10,0.0904,0.0,True,0.6055,medium
+hybrid,cf,ndcg@10,-0.0,0.7155,False,-0.0061,negligible
+hybrid,content,ndcg@10,0.1094,0.0,True,0.7227,medium

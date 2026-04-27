@@ -1,0 +1,7 @@
+protocol,comparison,delta_mean,p_value,cohens_d,effect,sig
+standard,Hybrid-Adaptive vs CF,-4e-05,0.6903,-0.0061,negligible,False
+standard,Hybrid-Fixed0.5 vs CF,-0.00531,0.0,-0.192,negligible,True
+standard,Hybrid-RRF vs CF,-0.00489,0.0,-0.1567,negligible,True
+long-tail,Hybrid-Adaptive vs CF,-4e-05,0.7007,-0.0061,negligible,False
+long-tail,Hybrid-Fixed0.5 vs CF,-0.00336,0.0,-0.1545,negligible,True
+long-tail,Hybrid-RRF vs CF,-0.00306,0.0002,-0.1203,negligible,True

@@ -199,6 +199,23 @@ class ContentModel:
         return obj
 
 
+class CFColdStart:
+    """
+    CF cannot recommend for a user with no fitted vector.  In cold-start
+    evaluation, the honest behavior is to fall back to popularity -- CF
+    degenerates to its weakest baseline.  This wrapper makes that explicit
+    so the degradation is benchmarkable rather than hidden.
+    """
+
+    def __init__(self, cf_model, popularity_model):
+        self.cf  = cf_model
+        self.pop = popularity_model
+
+    def recommend(self, user_id=None, seed_song=None, k: int = 10) -> pd.DataFrame:
+        """Always returns popularity recs regardless of seed or user_id."""
+        return self.pop.recommend(user_id=None, k=k)
+
+
 class PopularityBaseline:
     """
     Non-personalized baseline: recommends globally most-played songs.

@@ -13,6 +13,9 @@ class HybridRecommender:
                           n=100+ -> alpha ≈ 0.85  (lean CF)
         'fixed'     : always use self.alpha
         'switching' : alpha=1.0 if n_history > 20 else 0.0
+        'rrf'       : Reciprocal Rank Fusion (warm path); no alpha, no normalization.
+                      RRF score = 1/(60+rank_cf) + 1/(60+rank_ct).
+                      alpha_used=NaN in output; hybrid_score holds the RRF score.
 
     Score normalization: min-max within each model's top-50 candidate pool
     before blending.  CF scores (ALS dot-product) and cosine similarities
@@ -187,11 +190,15 @@ class HybridRecommender:
             return self._cold_start(seed_song, k)
 
         # ── Warm user ──
+        if seed_song is None:
+            seed_song = self._get_most_played_song(user_id)
+
+        if self.alpha_strategy == 'rrf':
+            return self._warm_rrf(user_id, seed_song, k, known_song_ids)
+
         alpha = self._compute_alpha(user_id)
 
         cf_raw  = self._cf_candidates(user_id, k=50, known_song_ids=known_song_ids)
-        if seed_song is None:
-            seed_song = self._get_most_played_song(user_id)
         ct_raw  = self._content_candidates(seed_song, k=50) if seed_song else {}
 
         # Normalize within each pool (make-or-break: prevents scale dominance)
@@ -245,6 +252,53 @@ class HybridRecommender:
         return result[['song_id', 'title', 'artist_name',
                         'hybrid_score', 'cf_score', 'content_score',
                         'alpha_used', 'source']]
+
+    def _warm_rrf(self, user_id: str, seed_song, k: int, known_song_ids) -> pd.DataFrame:
+        """
+        Warm-path Reciprocal Rank Fusion.
+
+        Fuses CF ALS ranking and content k-NN ranking without alpha or
+        score normalization.  RRF score = 1/(60+rank_cf) + 1/(60+rank_ct).
+        k=60 from Cormack et al. (2009).
+
+        alpha_used is NaN (RRF has no alpha); hybrid_score holds the RRF score.
+        """
+        cf_raw = self._cf_candidates(user_id, k=50, known_song_ids=known_song_ids)
+        ct_raw = self._content_candidates(seed_song, k=50) if seed_song else {}
+
+        RRF_K = 60
+        cf_ranked = {sid: r for r, sid in enumerate(
+            sorted(cf_raw, key=cf_raw.__getitem__, reverse=True), start=1)}
+        ct_ranked = {sid: r for r, sid in enumerate(
+            sorted(ct_raw, key=ct_raw.__getitem__, reverse=True), start=1)}
+
+        all_songs = set(cf_ranked) | set(ct_ranked)
+        rows = []
+        for sid in all_songs:
+            in_cf, in_ct = sid in cf_ranked, sid in ct_ranked
+            rrf = 0.0
+            if in_cf: rrf += 1.0 / (RRF_K + cf_ranked[sid])
+            if in_ct: rrf += 1.0 / (RRF_K + ct_ranked[sid])
+            rows.append({
+                'song_id':       sid,
+                'cf_score':      float(cf_raw[sid]) if in_cf else np.nan,
+                'content_score': float(ct_raw[sid]) if in_ct else np.nan,
+                'hybrid_score':  rrf,
+                'alpha_used':    np.nan,
+                'source': 'both' if (in_cf and in_ct) else
+                          ('cf_only' if in_cf else 'content_only'),
+            })
+
+        result = (
+            pd.DataFrame(rows)
+              .sort_values('hybrid_score', ascending=False)
+              .head(k)
+              .reset_index(drop=True)
+        )
+        result = self._attach_metadata(result)
+        return result[['song_id', 'title', 'artist_name',
+                        'hybrid_score', 'cf_score', 'content_score',
+                        'alpha_used', 'source']].reset_index(drop=True)
 
     def _genre_pop_ranked(self, seed_song: str):
         """
