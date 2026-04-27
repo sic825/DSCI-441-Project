@@ -269,7 +269,14 @@ class HybridRecommender:
 
         Returns columns:
             song_id, title, artist_name, track_genre,
-            hybrid_score, cf_score, content_score, alpha_used, source
+            hybrid_score, cf_score, content_score, alpha_used, source,
+            raw_cf_score, raw_content_score, cf_rank, content_seed
+
+        Extra columns (for demo explanations):
+            raw_cf_score     — pre-normalization ALS dot-product score (NaN if CF-only absent)
+            raw_content_score — pre-normalization cosine similarity (NaN if not in content pool)
+            cf_rank          — 1-indexed rank within the top-50 CF candidate pool (0 if absent)
+            content_seed     — song_id of the selected song that yielded max content similarity
         """
         liked_set = set(liked_song_ids)
         n         = len(liked_song_ids)
@@ -286,8 +293,16 @@ class HybridRecommender:
                 if sid not in liked_set:
                     cf_raw[sid] = float(row['cf_score'])
 
-        # ── Content k-NN from each liked seed (keep max similarity) ──────────
-        ct_raw = {}
+        # Rank within CF pool (1-indexed, sorted by raw score descending)
+        cf_ranks = {
+            sid: r for r, sid in enumerate(
+                sorted(cf_raw, key=cf_raw.__getitem__, reverse=True), start=1
+            )
+        }
+
+        # ── Content k-NN from each liked seed (keep max similarity + which seed) ──
+        ct_raw  = {}
+        ct_seed = {}  # rsid -> liked song_id that produced max similarity
         if self.content_model is not None:
             for sid in liked_song_ids:
                 if sid not in self.content_model._songid_to_idx:
@@ -299,6 +314,7 @@ class HybridRecommender:
                         sim = float(row['similarity'])
                         if ct_raw.get(rsid, 0) < sim:
                             ct_raw[rsid] = sim
+                            ct_seed[rsid] = sid
 
         # ── Normalize and blend ───────────────────────────────────────────────
         cf_norm = {}
@@ -332,12 +348,16 @@ class HybridRecommender:
                 h_score = (1.0 - alpha) * ct_s
 
             rows.append({
-                'song_id':       sid,
-                'cf_score':      cf_s,
-                'content_score': ct_s,
-                'hybrid_score':  h_score,
-                'alpha_used':    alpha,
-                'source':        source,
+                'song_id':           sid,
+                'cf_score':          cf_s,
+                'content_score':     ct_s,
+                'hybrid_score':      h_score,
+                'alpha_used':        alpha,
+                'source':            source,
+                'raw_cf_score':      cf_raw.get(sid, np.nan),
+                'raw_content_score': ct_raw.get(sid, np.nan),
+                'cf_rank':           cf_ranks.get(sid, 0),
+                'content_seed':      ct_seed.get(sid, ''),
             })
 
         result = (
@@ -354,7 +374,8 @@ class HybridRecommender:
         result['track_genre'] = result['track_genre'].fillna('Unknown')
         return result[['song_id', 'title', 'artist_name', 'track_genre',
                         'hybrid_score', 'cf_score', 'content_score',
-                        'alpha_used', 'source']]
+                        'alpha_used', 'source',
+                        'raw_cf_score', 'raw_content_score', 'cf_rank', 'content_seed']]
 
     def _warm_rrf(self, user_id: str, seed_song, k: int, known_song_ids) -> pd.DataFrame:
         """
