@@ -77,6 +77,53 @@ class CFModel:
             df['cf_score'] = scores
         return df
 
+    def recommend_for_synthetic_user(
+        self, liked_song_ids, k: int = 10, return_scores: bool = True
+    ) -> pd.DataFrame:
+        """
+        Fold-in inference for a synthetic user not in the training data.
+        Builds a sparse binary interaction row from liked_song_ids, then calls
+        ALS recommend with recalculate_user=True to compute a fresh user vector
+        without modifying the fitted model.
+        """
+        song_to_idx = {v: idx for idx, v in self._idx_to_song.items()}
+        n_items     = self._user_item.shape[1]
+        liked_set   = set(liked_song_ids)
+
+        col_idxs = [song_to_idx[sid] for sid in liked_song_ids if sid in song_to_idx]
+        if not col_idxs:
+            cols = ['song_id'] + (['cf_score'] if return_scores else [])
+            return pd.DataFrame(columns=cols)
+
+        user_row = csr_matrix(
+            (
+                np.ones(len(col_idxs), dtype=np.float32),
+                (np.zeros(len(col_idxs), dtype=np.int32),
+                 np.array(col_idxs, dtype=np.int32)),
+            ),
+            shape=(1, n_items),
+        )
+
+        idxs, scores = self._model.recommend(
+            0,             # dummy userid — ignored when recalculate_user=True
+            user_row,
+            N=k + len(col_idxs),   # request extra; filter_already_liked removes seeds
+            filter_already_liked_items=True,
+            recalculate_user=True,
+        )
+
+        # filter_already_liked_items should already exclude seeds, but guard anyway
+        result_sids = [
+            self._idx_to_song[int(i)] for i in idxs
+            if self._idx_to_song[int(i)] not in liked_set
+        ][:k]
+
+        df = pd.DataFrame({'song_id': result_sids})
+        if return_scores:
+            score_map   = {self._idx_to_song[int(i)]: float(s) for i, s in zip(idxs, scores)}
+            df['cf_score'] = df['song_id'].map(score_map)
+        return df
+
     def recommend_with_metadata(
         self, user_id: str, k: int, metadata_df: pd.DataFrame
     ) -> pd.DataFrame:

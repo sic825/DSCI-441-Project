@@ -6,8 +6,9 @@ _CSS = """
 /* ── Body: serif for academic feel ──────────────────────────────────────── */
 .main, .block-container {
     font-family: Georgia, 'Times New Roman', serif;
-    max-width: 900px;
-    margin: 0 auto;
+    max-width: 1300px;
+    padding-left: 2rem;
+    padding-right: 2rem;
 }
 
 /* ── Headings: clean sans-serif (hybrid-journal convention) ─────────────── */
@@ -16,7 +17,8 @@ h1 {
     font-size: 2.4em;
     font-weight: 600;
     border-bottom: 2px solid #1F4E79;
-    padding-bottom: 0.3em;
+    padding-bottom: 0.4em;
+    margin-bottom: 1.2em;
     color: #1A1A1A;
 }
 h2 {
@@ -50,6 +52,26 @@ li { line-height: 1.65; margin-bottom: 0.3em; }
     margin-bottom: 1.8em;
     line-height: 1.5;
 }
+
+/* ── Callout boxes ─────────────────────────────────────────────────────── */
+.callout {
+    background: #F8FAFC;
+    border-left: 4px solid #1F4E79;
+    padding: 0.9em 1.2em;
+    margin: 1em 0 1.6em 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 0.95em;
+}
+.callout-title {
+    font-weight: 600;
+    color: #1F4E79;
+    margin-bottom: 0.4em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.85em;
+}
+.callout ul { margin: 0.3em 0 0 0; padding-left: 1.4em; }
+.callout li { margin-bottom: 0.2em; line-height: 1.5; }
 
 /* ── Paper-style tables ─────────────────────────────────────────────────── */
 table {
@@ -137,6 +159,9 @@ code, pre {
 
 .katex { font-size: 1.05rem !important; }
 .element-container svg { border: 1px solid #D0D8E4; border-radius: 3px; }
+
+/* ── Hide the entry script from sidebar nav ─────────────────────────────── */
+[data-testid="stSidebarNav"] li:first-child { display: none; }
 </style>
 """
 
@@ -148,3 +173,11 @@ def inject():
 def figcap(text: str):
     """Render a figure caption in the .figure-caption style."""
     st.markdown(f'<p class="figure-caption">{text}</p>', unsafe_allow_html=True)
+
+
+def callout(title: str, body: str):
+    """Render a design-rationale callout box with a title and HTML body."""
+    st.markdown(f"""<div class="callout">
+    <div class="callout-title">{title}</div>
+    <div>{body}</div>
+</div>""", unsafe_allow_html=True)

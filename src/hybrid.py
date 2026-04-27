@@ -256,6 +256,106 @@ class HybridRecommender:
                         'hybrid_score', 'cf_score', 'content_score',
                         'alpha_used', 'source']]
 
+    def recommend_for_synthetic_user(
+        self, liked_song_ids, k: int = 10
+    ) -> pd.DataFrame:
+        """
+        Synthetic-user hybrid: ALS fold-in + multi-seed content k-NN.
+
+        Alpha is computed from len(liked_song_ids) via the adaptive formula
+        (same sigmoid as the warm path).  CF fold-in produces top-50 candidates;
+        content k-NN runs from each liked song and merges by max similarity.
+        Min-max blending identical to the warm path.
+
+        Returns columns:
+            song_id, title, artist_name, track_genre,
+            hybrid_score, cf_score, content_score, alpha_used, source
+        """
+        liked_set = set(liked_song_ids)
+        n         = len(liked_song_ids)
+        alpha     = float(1.0 / (1.0 + np.exp(-((np.log1p(n) - 2.0) / 1.5))))
+
+        # ── CF fold-in candidates ─────────────────────────────────────────────
+        cf_raw = {}
+        if self.cf_model is not None:
+            cf_df = self.cf_model.recommend_for_synthetic_user(
+                list(liked_song_ids), k=50
+            )
+            for _, row in cf_df.iterrows():
+                sid = row['song_id']
+                if sid not in liked_set:
+                    cf_raw[sid] = float(row['cf_score'])
+
+        # ── Content k-NN from each liked seed (keep max similarity) ──────────
+        ct_raw = {}
+        if self.content_model is not None:
+            for sid in liked_song_ids:
+                if sid not in self.content_model._songid_to_idx:
+                    continue
+                recs = self.content_model.recommend(sid, k=20)
+                for _, row in recs.iterrows():
+                    rsid = row['song_id']
+                    if rsid not in liked_set:
+                        sim = float(row['similarity'])
+                        if ct_raw.get(rsid, 0) < sim:
+                            ct_raw[rsid] = sim
+
+        # ── Normalize and blend ───────────────────────────────────────────────
+        cf_norm = {}
+        if cf_raw:
+            vals   = np.array(list(cf_raw.values()), dtype=float)
+            normed = self._minmax(vals)
+            cf_norm = dict(zip(cf_raw.keys(), normed))
+
+        ct_norm = {}
+        if ct_raw:
+            vals   = np.array(list(ct_raw.values()), dtype=float)
+            normed = self._minmax(vals)
+            ct_norm = dict(zip(ct_raw.keys(), normed))
+
+        all_songs = set(cf_norm) | set(ct_norm)
+        rows = []
+        for sid in all_songs:
+            in_cf = sid in cf_norm
+            in_ct = sid in ct_norm
+            cf_s  = cf_norm.get(sid, np.nan)
+            ct_s  = ct_norm.get(sid, np.nan)
+
+            if in_cf and in_ct:
+                source  = 'both'
+                h_score = alpha * cf_s + (1.0 - alpha) * ct_s
+            elif in_cf:
+                source  = 'cf_only'
+                h_score = alpha * cf_s
+            else:
+                source  = 'content_only'
+                h_score = (1.0 - alpha) * ct_s
+
+            rows.append({
+                'song_id':       sid,
+                'cf_score':      cf_s,
+                'content_score': ct_s,
+                'hybrid_score':  h_score,
+                'alpha_used':    alpha,
+                'source':        source,
+            })
+
+        result = (
+            pd.DataFrame(rows)
+              .sort_values('hybrid_score', ascending=False)
+              .head(k)
+              .reset_index(drop=True)
+        )
+        result = self._attach_metadata(result)
+        result = result.merge(
+            self.metadata_catalog[['song_id', 'track_genre']],
+            on='song_id', how='left',
+        )
+        result['track_genre'] = result['track_genre'].fillna('Unknown')
+        return result[['song_id', 'title', 'artist_name', 'track_genre',
+                        'hybrid_score', 'cf_score', 'content_score',
+                        'alpha_used', 'source']]
+
     def _warm_rrf(self, user_id: str, seed_song, k: int, known_song_ids) -> pd.DataFrame:
         """
         Warm-path Reciprocal Rank Fusion.
